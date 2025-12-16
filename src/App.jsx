@@ -17,6 +17,35 @@ const App = () => {
   const [missionResults, setMissionResults] = useState(null);
   const [showParticles, setShowParticles] = useState(false);
   const [unlockedPlanetId, setUnlockedPlanetId] = useState(null);
+  const [currentQuestions, setCurrentQuestions] = useState([]);
+  const [randomizedMissionData, setRandomizedMissionData] = useState(null);
+
+  // Pre-process mission data to vary correct answer positions across all missions
+  useEffect(() => {
+    const processData = async () => {
+      const randomized = {};
+      for (const [missionId, mission] of Object.entries(missionData)) {
+        randomized[missionId] = {
+          ...mission,
+          questions: mission.questions.map(q => {
+            // Shuffle options to ensure correct answer isn't always in the same position
+            const shuffledOptions = [...q.options].sort(() => Math.random() - 0.5);
+            // Find the new position of the correct answer after shuffle
+            const newCorrectIndex = shuffledOptions.indexOf(q.correct);
+            return {
+              ...q,
+              options: shuffledOptions,
+              // If shuffle moved the correct answer, keep it the same string, as position varies
+              // The correct property remains the string
+            };
+          })
+        };
+      }
+      setRandomizedMissionData(randomized);
+    };
+
+    processData();
+  }, []);
 
   // --- DATASETS ---
   const missionData = {
@@ -732,6 +761,19 @@ const App = () => {
 
   const startMission = (missionId) => {
     setCurrentMissionId(missionId);
+
+    // Use the pre-randomized mission data for varied correct answer positions
+    if (randomizedMissionData && randomizedMissionData[missionId]) {
+      // Do an additional shuffle to ensure even more variety
+      const shuffleQuestions = randomizedMissionData[missionId].questions.map(q => ({
+        ...q,
+        options: [...q.options].sort(() => Math.random() - 0.5)
+      }));
+      setCurrentQuestions(shuffleQuestions);
+    } else {
+      setCurrentQuestions([]);
+    }
+
     setCurrentQuestionIndex(0);
     setScore(0);
     setStreak(0);
@@ -743,10 +785,10 @@ const App = () => {
   // Game/Quiz Scene
   const GameScene = () => {
     const mission = missionData[currentMissionId];
-    if (!mission) return <div>Loading...</div>;
+    if (!mission || !currentQuestions.length) return <div>Loading...</div>;
 
-    const question = mission.questions[currentQuestionIndex];
-    const isLastQuestion = currentQuestionIndex === mission.questions.length - 1;
+    const question = currentQuestions[currentQuestionIndex];
+    const isLastQuestion = currentQuestionIndex === currentQuestions.length - 1;
 
     const handleAnswer = (answer) => {
       if (showResult) return;
@@ -765,7 +807,7 @@ const App = () => {
 
         setTimeout(() => {
           if (isLastQuestion) {
-            handleMissionComplete(score + 1, mission.questions.length);
+            handleMissionComplete(score + 1, currentQuestions.length);
           } else {
             setCurrentQuestionIndex(prev => prev + 1);
             setSelectedAnswer(null);
@@ -776,7 +818,7 @@ const App = () => {
         setStreak(0);
         setTimeout(() => {
           if (isLastQuestion) {
-            handleMissionComplete(score, mission.questions.length);
+            handleMissionComplete(score, currentQuestions.length);
           } else {
             setSelectedAnswer(null);
             setShowResult(false);
@@ -848,12 +890,12 @@ const App = () => {
           <div className="mb-12">
             <div className="flex items-center justify-between mb-3 text-sm">
               <span className="text-gray-500">Mission Progress</span>
-              <span className="text-gray-400">{currentQuestionIndex + 1} / {mission.questions.length}</span>
+              <span className="text-gray-400">{currentQuestionIndex + 1} / {currentQuestions.length}</span>
             </div>
             <div className="h-1 bg-white/5 rounded-full overflow-hidden">
               <div
                 className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-700"
-                style={{ width: `${((currentQuestionIndex + 1) / mission.questions.length) * 100}%` }}
+                style={{ width: `${((currentQuestionIndex + 1) / currentQuestions.length) * 100}%` }}
               ></div>
             </div>
           </div>
